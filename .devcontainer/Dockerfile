@@ -7,16 +7,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Set working directory
 WORKDIR /workspace
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    # Basic utilities
+# Update package list and install in stages to identify issues
+RUN apt-get update && apt-get upgrade -y
+
+# Install basic utilities
+RUN apt-get install -y \
     wget \
     curl \
     git \
     unzip \
     zip \
     tar \
-    # Build essentials
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install build essentials
+RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
     g++ \
@@ -26,29 +33,43 @@ RUN apt-get update && apt-get install -y \
     automake \
     libtool \
     pkg-config \
-    # Java (required for mkgmap and splitter)
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Java
+RUN apt-get update && apt-get install -y \
     openjdk-17-jdk \
-    # Python for scripting
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python
+RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-dev \
-    # Geographic data processing
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install GDAL and geographic tools
+RUN apt-get update && apt-get install -y \
     gdal-bin \
     libgdal-dev \
     python3-gdal \
-    osmosis \
-    osmium-tool \
-    # Additional geo libraries
-    libosmium2-dev \
     libexpat1-dev \
     zlib1g-dev \
     libbz2-dev \
-    # Image processing (for map styling)
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install osmium-tool (osmosis might not be available)
+RUN apt-get update && apt-get install -y \
+    osmium-tool \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install additional utilities
+RUN apt-get update && apt-get install -y \
     imagemagick \
-    # Text processing
-    sed \
-    awk \
-    # Clean up
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -70,8 +91,9 @@ RUN wget https://www.mkgmap.org.uk/download/splitter-latest.tar.gz \
     && mv splitter-* /opt/splitter \
     && ln -s /opt/splitter/splitter.jar /usr/local/bin/splitter.jar
 
-# Install phyghtmap (for DEM to OSM contour conversion)
-RUN pip3 install --no-cache-dir phyghtmap
+# Upgrade pip and install phyghtmap
+RUN pip3 install --upgrade pip setuptools wheel \
+    && pip3 install --no-cache-dir phyghtmap
 
 # Install additional Python packages for data processing
 RUN pip3 install --no-cache-dir \
@@ -90,8 +112,8 @@ RUN mkdir -p /workspace/data/osm \
     /workspace/scripts
 
 # Create helper scripts
-RUN echo '#!/bin/bash\njava -jar /opt/mkgmap/mkgmap.jar "$@"' > /usr/local/bin/mkgmap \
-    && echo '#!/bin/bash\njava -jar /opt/splitter/splitter.jar "$@"' > /usr/local/bin/splitter \
+RUN echo '#!/bin/bash\njava -Xmx4g -jar /opt/mkgmap/mkgmap.jar "$@"' > /usr/local/bin/mkgmap \
+    && echo '#!/bin/bash\njava -Xmx4g -jar /opt/splitter/splitter.jar "$@"' > /usr/local/bin/splitter \
     && chmod +x /usr/local/bin/mkgmap /usr/local/bin/splitter
 
 # Set environment variables
