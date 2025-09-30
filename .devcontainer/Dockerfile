@@ -115,13 +115,16 @@ RUN pip3 install --no-cache-dir \
     pyproj \
     pillow
 
-# Install phyghtmap from official source
-RUN wget http://katze.tfiu.de/projects/phyghtmap/phyghtmap_2.23.orig.tar.gz \
-    && tar -xzf phyghtmap_2.23.orig.tar.gz \
-    && cd phyghtmap-2.23 \
+# Install phyghtmap from official source (latest version with numpy fix)
+RUN wget http://katze.tfiu.de/projects/phyghtmap/phyghtmap_2.24.orig.tar.gz \
+    && tar -xzf phyghtmap_2.24.orig.tar.gz \
+    && cd phyghtmap-2.24 \
     && pip3 install . \
     && cd / \
-    && rm -rf phyghtmap-2.23 phyghtmap_2.23.orig.tar.gz
+    && rm -rf phyghtmap-2.24 phyghtmap_2.24.orig.tar.gz
+
+# Clone freizeitkarte style for reference
+RUN git clone https://github.com/freizeitkarte/freizeitkarte.git /opt/freizeitkarte
 
 # Create directories for data storage
 RUN mkdir -p /workspace/data/osm \
