@@ -19,7 +19,9 @@ MAP_ID="${MAP_ID:-63240001}"
 FAMILY_ID="${FAMILY_ID:-6324}"
 
 # UK bounding box (approximate)
-UK_BBOX="49.9:2.5:60.9:-8.0"  # min_lat:max_lon:max_lat:min_lon
+# Format: min_lat:min_lon:max_lat:max_lon
+UK_BBOX_PHYGHTMAP="49.9:-8.0:60.9:2.5"  # For phyghtmap
+UK_BBOX_OSMIUM="49.9,2.5,60.9,-8.0"     # For osmium (if needed)
 
 # Create directories
 mkdir -p "$OSM_DIR" "$DEM_DIR" "$OUTPUT_DIR" "$WORK_DIR"
@@ -46,39 +48,40 @@ fi
 # Step 2: Download DEM data
 echo ""
 echo "[2/6] Downloading DEM (elevation) data..."
-echo "Using SRTM data via phyghtmap (will auto-download)..."
+echo "SKIPPING DEM generation for now (can be enabled later)"
+CONTOUR_FILE=""
 
-# Generate contour lines from DEM data
-CONTOUR_FILE="$DEM_DIR/uk_contours.osm"
-
-if [ ! -f "$CONTOUR_FILE" ]; then
-    echo "Generating contour lines (20m intervals)..."
-    phyghtmap \
-        --max-nodes-per-tile=0 \
-        --source=view3 \
-        --step=20 \
-        --line-cat=400,100 \
-        --simplify=5 \
-        --start-node-id=20000000000 \
-        --start-way-id=10000000000 \
-        --write-timestamp \
-        --output-prefix="$DEM_DIR/uk" \
-        --pbf \
-        --area=$UK_BBOX
-    
-    # Find the generated file
-    GENERATED_CONTOUR=$(ls -t "$DEM_DIR"/uk_*.osm.pbf 2>/dev/null | head -1)
-    if [ -f "$GENERATED_CONTOUR" ]; then
-        mv "$GENERATED_CONTOUR" "$DEM_DIR/uk_contours.osm.pbf"
-        CONTOUR_FILE="$DEM_DIR/uk_contours.osm.pbf"
-        echo "Contours generated: $(du -h "$CONTOUR_FILE" | cut -f1)"
-    else
-        echo "Warning: No contour file generated, continuing without elevation data"
-        CONTOUR_FILE=""
-    fi
-else
-    echo "Contour file already exists, skipping generation."
-fi
+# Uncomment below to enable DEM contours:
+# echo "Using SRTM data via phyghtmap (will auto-download)..."
+# CONTOUR_FILE="$DEM_DIR/uk_contours.osm"
+# 
+# if [ ! -f "$CONTOUR_FILE" ]; then
+#     echo "Generating contour lines (20m intervals)..."
+#     phyghtmap \
+#         --max-nodes-per-tile=0 \
+#         --source=view3 \
+#         --step=20 \
+#         --line-cat=400,100 \
+#         --start-node-id=20000000000 \
+#         --start-way-id=10000000000 \
+#         --write-timestamp \
+#         --output-prefix="$DEM_DIR/uk" \
+#         --pbf \
+#         --area=$UK_BBOX_PHYGHTMAP
+#     
+#     # Find the generated file
+#     GENERATED_CONTOUR=$(ls -t "$DEM_DIR"/uk_*.osm.pbf 2>/dev/null | head -1)
+#     if [ -f "$GENERATED_CONTOUR" ]; then
+#         mv "$GENERATED_CONTOUR" "$DEM_DIR/uk_contours.osm.pbf"
+#         CONTOUR_FILE="$DEM_DIR/uk_contours.osm.pbf"
+#         echo "Contours generated: $(du -h "$CONTOUR_FILE" | cut -f1)"
+#     else
+#         echo "Warning: No contour file generated, continuing without elevation data"
+#         CONTOUR_FILE=""
+#     fi
+# else
+#     echo "Contour file already exists, skipping generation."
+# fi
 
 # Step 3: Merge OSM and contour data
 echo ""
@@ -99,23 +102,27 @@ echo "[4/6] Splitting data into tiles..."
 cd "$WORK_DIR"
 
 if [ ! -f "$WORK_DIR/63240001.osm.pbf" ]; then
+    echo "This may take 15-30 minutes for UK data..."
     splitter \
-        --max-nodes=1000000 \
+        --max-nodes=1200000 \
+        --max-threads=4 \
         --mapid=$MAP_ID \
         --output=pbf \
+        --write-kml="$WORK_DIR/areas.kml" \
         "$MERGED_FILE"
-    echo "Splitting complete."
+    
+    # Count the number of tiles created
+    TILE_COUNT=$(ls -1 $WORK_DIR/6324*.osm.pbf 2>/dev/null | wc -l)
+    echo "Splitting complete. Created $TILE_COUNT tiles."
 else
     echo "Split files already exist, skipping split."
 fi
 
 # Step 5: Create style file for mkgmap
 echo ""
-echo "[5/6] Creating map style..."
+echo "[5/6] Preparing map configuration..."
 
-# Create a basic style directory
-STYLE_DIR="$WORK_DIR/style"
-mkdir -p "$STYLE_DIR"
+# Note: Using default mkgmap style (no custom style needed for basic maps)
 
 # Create options file for better map rendering
 cat > "$WORK_DIR/mkgmap_options.args" << 'EOF'
@@ -136,53 +143,35 @@ generate-sea=extend-sea-sectors
 draw-priority: 25
 transparent
 
-# Routing options
+# Routing options - ENHANCED FOR HIKING/CYCLING
 route
 drive-on-left
-check-roundabouts
+report-roundabout-issues
 add-boundary-nodes-at-admin-boundaries=2
+process-exits
+process-destination
+
+# Hiking and cycling routing
+make-opposite-cycleways
+ignore-turn-restrictions
+ignore-maxspeeds
 
 # Index options
 index
 housenumbers
-road-name-config: roadNameConfig
 
 # Address search
 location-autofill=is_in,nearest
 
 # Performance
 max-jobs
-
-# Contour settings
-style-file: contours
 EOF
-
-# Create simple contours style
-mkdir -p "$STYLE_DIR/contours"
-cat > "$STYLE_DIR/contours/version" << 'EOF'
-1
-EOF
-
-cat > "$STYLE_DIR/contours/lines" << 'EOF'
-# Contour lines
-contour=elevation & contour_ext=elevation_minor { name '${ele|conv:m=>ft}'; } [0x20 resolution 23]
-contour=elevation & contour_ext=elevation_medium { name '${ele|conv:m=>ft}'; } [0x21 resolution 21]
-contour=elevation & contour_ext=elevation_major { name '${ele|conv:m=>ft}'; } [0x22 resolution 20]
-EOF
-
-cat > "$STYLE_DIR/contours/points" << 'EOF'
-# Contour points/peaks
-natural=peak [0x6616 resolution 20]
-EOF
-
-echo "Style files created."
 
 # Step 6: Build the Garmin map
 echo ""
 echo "[6/6] Building Garmin map file..."
 
 mkgmap \
-    --style-file="$STYLE_DIR" \
     -c "$WORK_DIR/mkgmap_options.args" \
     --mapname=$MAP_ID \
     --description="$MAP_NAME" \
@@ -206,17 +195,42 @@ if [ -f "$OUTPUT_DIR/gmapsupp.img" ]; then
     echo "To install on your Garmin watch:"
     echo "1. Connect your watch via USB"
     echo "2. Copy gmapsupp.img to /GARMIN/ folder"
+    echo "   (Backup any existing gmapsupp.img first!)"
     echo "3. Safely eject and restart your watch"
+    echo "4. On watch: Settings > Map > Select Map"
     echo ""
 else
-    echo "ERROR: Map file was not created!"
-    exit 1
+    echo "ERROR: gmapsupp.img was not created!"
+    echo "Checking for individual map files..."
+    
+    # Try to create gmapsupp.img from individual files
+    if ls "$OUTPUT_DIR"/6324*.img 1> /dev/null 2>&1; then
+        echo "Found individual map files, combining them..."
+        mkgmap \
+            --gmapsupp \
+            --output-dir="$OUTPUT_DIR" \
+            "$OUTPUT_DIR"/6324*.img
+        
+        if [ -f "$OUTPUT_DIR/gmapsupp.img" ]; then
+            echo "Successfully created gmapsupp.img"
+        else
+            echo "Failed to create combined map file"
+            exit 1
+        fi
+    else
+        echo "No map files found!"
+        exit 1
+    fi
 fi
 
 # Optional: Create additional formats
-echo "Creating named map file..."
+echo "Creating named map file for reference..."
 cp "$OUTPUT_DIR/gmapsupp.img" "$OUTPUT_DIR/${MAP_NAME}.img"
 
+echo ""
+echo "Files created:"
+echo "  - gmapsupp.img (copy this to watch /GARMIN/ folder)"
+echo "  - ${MAP_NAME}.img (backup/reference copy)"
 echo ""
 echo "Build complete! Files available in: $OUTPUT_DIR"
 ls -lh "$OUTPUT_DIR"/*.img
