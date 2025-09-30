@@ -61,6 +61,15 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python packages needed for phyghtmap
+RUN apt-get update && apt-get install -y \
+    python3-matplotlib \
+    python3-bs4 \
+    python3-numpy \
+    python3-pil \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install osmium-tool (osmosis might not be available)
 RUN apt-get update && apt-get install -y \
     osmium-tool \
@@ -105,12 +114,13 @@ RUN pip3 install --no-cache-dir \
     pyproj \
     pillow
 
-# Install phyghtmap from GitHub (no longer on PyPI)
-RUN git clone https://github.com/agrenott/phyghtmap.git /tmp/phyghtmap \
-    && cd /tmp/phyghtmap \
-    && pip3 install . \
+# Install phyghtmap from official source
+RUN wget http://katze.tfiu.de/projects/phyghtmap/phyghtmap_2.23.orig.tar.gz \
+    && tar -xzf phyghtmap_2.23.orig.tar.gz \
+    && cd phyghtmap-2.23 \
+    && python3 setup.py install \
     && cd / \
-    && rm -rf /tmp/phyghtmap
+    && rm -rf phyghtmap-2.23 phyghtmap_2.23.orig.tar.gz
 
 # Create directories for data storage
 RUN mkdir -p /workspace/data/osm \
