@@ -100,8 +100,9 @@ RUN wget https://www.mkgmap.org.uk/download/splitter-latest.tar.gz \
     && mv splitter-* /opt/splitter \
     && ln -s /opt/splitter/splitter.jar /usr/local/bin/splitter.jar
 
-# Upgrade pip
-RUN pip3 install --upgrade pip setuptools wheel
+# Upgrade pip and downgrade setuptools for compatibility
+RUN pip3 install --upgrade pip \
+    && pip3 install setuptools==68.0.0 wheel
 
 # Install Python packages for data processing
 RUN pip3 install --no-cache-dir \
@@ -118,7 +119,7 @@ RUN pip3 install --no-cache-dir \
 RUN wget http://katze.tfiu.de/projects/phyghtmap/phyghtmap_2.23.orig.tar.gz \
     && tar -xzf phyghtmap_2.23.orig.tar.gz \
     && cd phyghtmap-2.23 \
-    && python3 setup.py install \
+    && pip3 install . \
     && cd / \
     && rm -rf phyghtmap-2.23 phyghtmap_2.23.orig.tar.gz
 
