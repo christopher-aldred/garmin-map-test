@@ -91,11 +91,10 @@ RUN wget https://www.mkgmap.org.uk/download/splitter-latest.tar.gz \
     && mv splitter-* /opt/splitter \
     && ln -s /opt/splitter/splitter.jar /usr/local/bin/splitter.jar
 
-# Upgrade pip and install phyghtmap
-RUN pip3 install --upgrade pip setuptools wheel \
-    && pip3 install --no-cache-dir phyghtmap
+# Upgrade pip
+RUN pip3 install --upgrade pip setuptools wheel
 
-# Install additional Python packages for data processing
+# Install Python packages for data processing
 RUN pip3 install --no-cache-dir \
     requests \
     beautifulsoup4 \
@@ -103,7 +102,15 @@ RUN pip3 install --no-cache-dir \
     numpy \
     matplotlib \
     osmium \
-    pyproj
+    pyproj \
+    pillow
+
+# Install phyghtmap from GitHub (no longer on PyPI)
+RUN git clone https://github.com/agrenott/phyghtmap.git /tmp/phyghtmap \
+    && cd /tmp/phyghtmap \
+    && pip3 install . \
+    && cd / \
+    && rm -rf /tmp/phyghtmap
 
 # Create directories for data storage
 RUN mkdir -p /workspace/data/osm \
